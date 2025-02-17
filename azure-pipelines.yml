@@ -114,7 +114,6 @@ stages:
 - stage: 'Test'
   displayName: 'Deploy to the test environment'
   dependsOn: Dev
-  #condition: eq(variables['Build.Reason'], 'Schedule')
   jobs:
   - deployment: Deploy
     pool:
@@ -136,6 +135,7 @@ stages:
               azureSubscription: 'Resource Manager - Tailspin - Space Game'
               appName: '$(WebAppNameTest)'
               package: '$(Pipeline.Workspace)/drop/$(buildConfiguration)/*.zip'
+              
   - job: RunUITests
     dependsOn: Deploy
     displayName: 'Run UI tests'
@@ -145,17 +145,46 @@ stages:
          - agent.name -equals MyAgent
     variables:
     - group: 'Release'
-    steps: 
+    steps:
+    - script: |
+        echo "Verificando instalación de Google Chrome..."
+        if command -v chrome > /dev/null 2>&1; then
+            echo "Google Chrome ya está instalado."
+            chrome --version
+        else
+            echo "Google Chrome no está instalado. Procediendo con la instalación..."
+            choco install googlechrome --force --no-progress
+        fi
+      displayName: "Verificar e instalar Google Chrome"
+
+    - script: |
+        echo "Verificando instalación de ChromeDriver..."
+        CHROMEDRIVER_VERSION="133.0.6943.59"
+        if command -v chromedriver > /dev/null 2>&1; then
+            INSTALLED_VERSION=$(chromedriver --version | awk '{print $2}')
+            echo "ChromeDriver instalado: $INSTALLED_VERSION"
+            if [ "$INSTALLED_VERSION" != "$CHROMEDRIVER_VERSION" ]; then
+                echo "Versión incorrecta de ChromeDriver. Instalando la versión correcta..."
+                choco upgrade chromedriver --version=$CHROMEDRIVER_VERSION --force --no-progress
+            fi
+        else
+            echo "ChromeDriver no está instalado. Instalando..."
+            choco install chromedriver --version=$CHROMEDRIVER_VERSION --force --no-progress
+        fi
+      displayName: "Verificar e instalar ChromeDriver"
+
     - task: UseDotNet@2
       displayName: 'Use .NET SDK $(dotnetSdkVersion)'
       inputs:
         version: '$(dotnetSdkVersion)'
+
     - task: DotNetCoreCLI@2
       displayName: 'Build the project - $(buildConfiguration)'
       inputs:
         command: 'build'
         arguments: '--configuration $(buildConfiguration)'
         projects: '$(System.DefaultWorkingDirectory)/**/*UITests.csproj'
+
     - task: DotNetCoreCLI@2
       displayName: 'Run unit tests - $(buildConfiguration)'
       inputs:
