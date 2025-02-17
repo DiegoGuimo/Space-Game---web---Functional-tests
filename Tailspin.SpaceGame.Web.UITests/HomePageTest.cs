@@ -29,7 +29,8 @@ namespace UITests
         {
             try
             {
-                string chromeDriverPath = @"C:\Users\diegoguillen\agent\tools";
+                ChromeDriverService service = ChromeDriverService.CreateDefaultService(@"C:\Users\diegoguillen\agent\tools");
+                service.HideCommandPromptWindow = true; // Oculta la ventana del servicio
                 
                 ChromeOptions options = new ChromeOptions();
                 options.AddArgument("--start-maximized"); // Ejemplo de configuración: abrir maximizado
@@ -39,7 +40,7 @@ namespace UITests
                 switch(browser)
                 {
                   case "Chrome":
-                    driver = new ChromeDriver(chromeDriverPath, options);
+                    driver = new ChromeDriver(service, options);
                     break;
                   case "Firefox":
                     driver = new FirefoxDriver(
