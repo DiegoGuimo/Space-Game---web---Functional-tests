@@ -7,6 +7,8 @@ using OpenQA.Selenium.Support.UI;
 using System;
 using System.Collections;
 
+
+
 namespace UITests
 {
     [TestFixture("Chrome")]
@@ -27,13 +29,17 @@ namespace UITests
         {
             try
             {
+                string chromeDriverPath = @"C:\Users\diegoguillen\agent\tools";
+                
+                ChromeOptions options = new ChromeOptions();
+                options.AddArgument("--start-maximized"); // Ejemplo de configuración: abrir maximizado
+                options.AddArgument("--disable-notifications"); // 
+
                 // Create the driver for the current browser.
                 switch(browser)
                 {
                   case "Chrome":
-                    driver = new ChromeDriver(
-                        Environment.GetEnvironmentVariable("ChromeWebDriver")
-                    );
+                    driver = new ChromeDriver(chromeDriverPath, options);
                     break;
                   case "Firefox":
                     driver = new FirefoxDriver(
