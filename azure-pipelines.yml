@@ -76,144 +76,41 @@ stages:
     - publish: $(Build.ArtifactStagingDirectory)
       artifact: drop
 
-- stage: 'Dev'
-  displayName: 'Deploy to the dev environment'
-  dependsOn: Build
-  condition: succeeded()
-  jobs:
-  - job: Validate
-    displayName: 'Validation Job'
-    steps:
-    - script: echo "Validation successful"
-
-- stage: 'Deploy'
-  displayName: 'Deploy the web application'
-  dependsOn: Build
-  jobs:
-  - deployment: Deploy
-    pool:
-      name: 'RetoAzure'
-      demands:
-        - agent.name -equals MyAgent
-    environment: dev
-    variables:
-    - group: Release
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - download: current
-            artifact: drop
-          - task: AzureWebApp@1
-            displayName: 'Azure App Service Deploy: website'
-            inputs:
-              azureSubscription: 'Resource Manager - Tailspin - Space Game'
-              appName: '$(WebAppNameDev)'
-              package: '$(Pipeline.Workspace)/drop/$(buildConfiguration)/*.zip'
-
 - stage: 'Test'
   displayName: 'Deploy to the test environment'
-  dependsOn: Dev
+  dependsOn: Build
   jobs:
-  - deployment: Deploy
-    pool:
-      name: 'RetoAzure'
-      demands:
-        - agent.name -equals MyAgent
-    environment: test
-    variables:
-    - group: 'Release'
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - download: current
-            artifact: drop
-          - task: AzureWebApp@1
-            displayName: 'Azure App Service Deploy: website'
-            inputs:
-              azureSubscription: 'Resource Manager - Tailspin - Space Game'
-              appName: '$(WebAppNameTest)'
-              package: '$(Pipeline.Workspace)/drop/$(buildConfiguration)/*.zip'
-              
   - job: RunUITests
-    dependsOn: Deploy
     displayName: 'Run UI tests'
     pool:
       name: 'RetoAzure'
       demands:
          - agent.name -equals MyAgent
-    variables:
-    - group: 'Release'
-    steps:
+    steps: 
     - script: |
         echo "Verificando instalación de Google Chrome..."
-        if command -v chrome > /dev/null 2>&1; then
-            echo "Google Chrome ya está instalado."
-            chrome --version
-        else
-            echo "Google Chrome no está instalado. Procediendo con la instalación..."
-            choco install googlechrome --force --no-progress
-        fi
-      displayName: "Verificar e instalar Google Chrome"
-
-    - script: |
-        echo "Verificando instalación de ChromeDriver..."
-        CHROMEDRIVER_VERSION="133.0.6943.59"
-        if command -v chromedriver > /dev/null 2>&1; then
-            INSTALLED_VERSION=$(chromedriver --version | awk '{print $2}')
-            echo "ChromeDriver instalado: $INSTALLED_VERSION"
-            if [ "$INSTALLED_VERSION" != "$CHROMEDRIVER_VERSION" ]; then
-                echo "Versión incorrecta de ChromeDriver. Instalando la versión correcta..."
-                choco upgrade chromedriver --version=$CHROMEDRIVER_VERSION --force --no-progress
-            fi
-        else
-            echo "ChromeDriver no está instalado. Instalando..."
-            choco install chromedriver --version=$CHROMEDRIVER_VERSION --force --no-progress
-        fi
-      displayName: "Verificar e instalar ChromeDriver"
+        where chrome || (
+          echo "Google Chrome no está instalado. Instalando..."
+          powershell -Command "Start-Process msiexec.exe -ArgumentList '/i https://dl.google.com/chrome/install/latest/chrome_installer.exe /quiet /norestart' -Wait"
+        )
+      displayName: 'Verificar e instalar Google Chrome'
 
     - task: UseDotNet@2
       displayName: 'Use .NET SDK $(dotnetSdkVersion)'
       inputs:
         version: '$(dotnetSdkVersion)'
-
+    
     - task: DotNetCoreCLI@2
       displayName: 'Build the project - $(buildConfiguration)'
       inputs:
         command: 'build'
         arguments: '--configuration $(buildConfiguration)'
         projects: '$(System.DefaultWorkingDirectory)/**/*UITests.csproj'
-
+    
     - task: DotNetCoreCLI@2
-      displayName: 'Run unit tests - $(buildConfiguration)'
+      displayName: 'Run UI tests - $(buildConfiguration)'
       inputs:
         command: 'test'
         arguments: '--no-build --configuration $(buildConfiguration)'
         publishTestResults: true
-        projects: '$(System.DefaultWorkingDirectory)/**/*UITests.csproj'  
-
-- stage: 'Staging'
-  displayName: 'Deploy to the staging environment'
-  dependsOn: Test
-  jobs:
-  - deployment: Deploy
-    pool:
-      name: 'RetoAzure'
-      demands:
-        - agent.name -equals MyAgent
-    environment: staging
-    variables:
-    - group: 'Release'
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - download: current
-            artifact: drop
-          - task: AzureWebApp@1
-            displayName: 'Azure App Service Deploy: website'
-            inputs:
-              azureSubscription: 'Resource Manager - Tailspin - Space Game'
-              appName: '$(WebAppNameStaging)'
-              package: '$(Pipeline.Workspace)/drop/$(buildConfiguration)/*.zip'
+        projects: '$(System.DefaultWorkingDirectory)/**/*UITests.csproj'
