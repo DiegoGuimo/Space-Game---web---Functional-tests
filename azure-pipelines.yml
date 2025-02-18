@@ -76,7 +76,7 @@ stages:
     - publish: $(Build.ArtifactStagingDirectory)
       artifact: drop
 
-- stage: 'Install ChromeDriver'
+- stage: 'Install_ChromeDriver'
   displayName: 'Install ChromeDriver'
   jobs:
   - job: Install
