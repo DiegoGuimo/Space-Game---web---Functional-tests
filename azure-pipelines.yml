@@ -156,36 +156,7 @@ stages:
     variables:
     - group: 'Release'
     steps:
-    - task: UseDotNet@2
-      displayName: 'Use .NET SDK $(dotnetSdkVersion)'
-      inputs:
-        version: '$(dotnetSdkVersion)'
-    - task: DotNetCoreCLI@2
-      displayName: 'Build the project - $(buildConfiguration)'
-      inputs:
-        command: 'build'
-        arguments: '--configuration $(buildConfiguration)'
-        projects: '$(System.DefaultWorkingDirectory)/**/*UITests.csproj'
-    - task: DotNetCoreCLI@2
-      displayName: 'Run unit tests - $(buildConfiguration)'
-      inputs:
-        command: 'test'
-        arguments: '--no-build --configuration $(buildConfiguration)'
-        publishTestResults: true
-        projects: '$(System.DefaultWorkingDirectory)/**/*UITests.csproj'
-
-# Iniciar ChromeDriver y ejecutar pruebas
-- stage: 'StartWebDriver'
-  displayName: 'Install and Start ChromeDriver'
-  jobs:
-  - job: StartDriver
-    displayName: Start ChromeDriver and Run Tests
-    pool:
-      name: 'RetoAzure'
-      demands:
-        - agent.name -equals MyAgent
-    steps:
-    # Descargar e instalar ChromeDriver
+    # Descargar e instalar ChromeDriver antes de las pruebas
     - script: |
         wget https://chromedriver.storage.googleapis.com/113.0.5672.63/chromedriver_linux64.zip
         unzip chromedriver_linux64.zip
@@ -198,11 +169,25 @@ stages:
         nohup chromedriver --port=9515 --verbose &
       displayName: 'Start ChromeDriver'
 
-    # Ejecutar pruebas
-    - task: DotNetCoreCLI@2
-      displayName: 'Run UI Tests with Selenium'
+    # Usar .NET SDK
+    - task: UseDotNet@2
+      displayName: 'Use .NET SDK $(dotnetSdkVersion)'
       inputs:
-        command: test
+        version: '$(dotnetSdkVersion)'
+
+    # Construir el proyecto para pruebas
+    - task: DotNetCoreCLI@2
+      displayName: 'Build the project for tests - $(buildConfiguration)'
+      inputs:
+        command: 'build'
         arguments: '--configuration $(buildConfiguration)'
+        projects: '$(System.DefaultWorkingDirectory)/**/*UITests.csproj'
+
+    # Ejecutar pruebas unitarias
+    - task: DotNetCoreCLI@2
+      displayName: 'Run UI tests - $(buildConfiguration)'
+      inputs:
+        command: 'test'
+        arguments: '--no-build --configuration $(buildConfiguration)'
         publishTestResults: true
         projects: '$(System.DefaultWorkingDirectory)/**/*UITests.csproj'
