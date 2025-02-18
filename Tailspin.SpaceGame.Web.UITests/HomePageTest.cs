@@ -18,6 +18,8 @@ namespace UITests
         private string browser;
         private IWebDriver driver;
 
+       ;
+
         public HomePageTest(string browser)
         {
             this.browser = browser;
@@ -36,7 +38,7 @@ namespace UITests
                 ChromeOptions options = new ChromeOptions();
                 options.AddArgument("--start-maximized"); // Ejemplo de configuración: abrir maximizado
                 options.AddArgument("--disable-notifications"); // 
-
+                
 
                 driver = new ChromeDriver(service, options);
    
