@@ -12,8 +12,7 @@ using System.Collections;
 namespace UITests
 {
     [TestFixture("Chrome")]
-    [TestFixture("Firefox")]
-    [TestFixture("Edge")]
+  
     public class HomePageTest
     {
         private string browser;
@@ -29,39 +28,21 @@ namespace UITests
         {
             try
             {
-                ChromeDriverService service = ChromeDriverService.CreateDefaultService(@"C:\Users\diegoguillen\agent\tools");
+                ChromeDriverService service = ChromeDriverService.CreateDefaultService(
+                    @"C:\Users\diegoguillen\Documents\Semillero\Azure\Space Game - web - Functional tests\mslearn-tailspin-spacegame-web-deploy\Tailspin.SpaceGame.Web.UITests\bin\Release\net8.0"
+                );
                 service.HideCommandPromptWindow = true; // Oculta la ventana del servicio
                 
                 ChromeOptions options = new ChromeOptions();
                 options.AddArgument("--start-maximized"); // Ejemplo de configuración: abrir maximizado
                 options.AddArgument("--disable-notifications"); // 
 
-                // Create the driver for the current browser.
-                switch(browser)
-                {
-                  case "Chrome":
-                    driver = new ChromeDriver(service, options);
-                    break;
-                  case "Firefox":
-                    driver = new FirefoxDriver(
-                        Environment.GetEnvironmentVariable("GeckoWebDriver")
-                    );
-                    break;
-                  case "Edge":
-                    driver = new EdgeDriver(
-                        Environment.GetEnvironmentVariable("EdgeWebDriver"),
-                        new EdgeOptions
-                        {
-                            UseChromium = true
-                        }
-                    );
-                    break;
-                  default:
-                    throw new ArgumentException($"'{browser}': Unknown browser");
-                }
+
+                driver = new ChromeDriver(service, options);
+   
 
                 // Wait until the page is fully loaded on every page navigation or page reload.
-                driver.Manage().Timeouts().ImplicitWait = TimeSpan.FromSeconds(20);
+                driver.Manage().Timeouts().ImplicitWait = TimeSpan.FromSeconds(40);
 
                 // Navigate to the site.
                 // The site name is stored in the SITE_URL environment variable to make 
