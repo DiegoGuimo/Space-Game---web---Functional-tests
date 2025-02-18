@@ -76,21 +76,6 @@ stages:
     - publish: $(Build.ArtifactStagingDirectory)
       artifact: drop
 
-- stage: 'Install_ChromeDriver'
-  displayName: 'Install ChromeDriver'
-  jobs:
-  - job: Install
-    pool:
-      name: 'RetoAzure'
-      demands:
-        - agent.name -equals MyAgent
-    steps:
-    - script: |
-        curl -Lo chromedriver.zip https://chromedriver.storage.googleapis.com/113.0.5672.63/chromedriver_win32.zip
-        Expand-Archive -Path chromedriver.zip -DestinationPath .
-        move chromedriver.exe C:\tools\chromedriver.exe
-      displayName: 'Download and Install ChromeDriver'
-
 - stage: 'Dev'
   displayName: 'Deploy to the dev environment'
   dependsOn: Build
