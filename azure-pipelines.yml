@@ -159,10 +159,12 @@ stages:
 
     - script: |
         echo "Descargando e instalando ChromeDriver..."
-        curl -o chromedriver.zip https://chromedriver.storage.googleapis.com/133.0.6943.59/chromedriver_win32.zip
+        CHROME_VERSION=$(powershell "(Get-Item 'C:\Program Files\Google\Chrome\Application\chrome.exe').VersionInfo.FileVersion")
+        CHROMEDRIVER_VERSION=$(curl -sS https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions.json | jq -r ".channels.Stable.version")
+        curl -o chromedriver.zip https://storage.googleapis.com/chrome-for-testing-public/$CHROMEDRIVER_VERSION/win64/chromedriver-win64.zip
         powershell -Command "Expand-Archive -Path chromedriver.zip -DestinationPath C:\chromedriver"
         del chromedriver.zip
-        setx PATH "%PATH%;C:\chromedriver"
+        echo "##vso[task.setvariable variable=PATH]C:\chromedriver;$(PATH)"
       displayName: 'Descargar e instalar ChromeDriver'
 
     - task: DotNetCoreCLI@2
@@ -176,9 +178,10 @@ stages:
       displayName: 'Run UI tests - $(buildConfiguration)'
       inputs:
         command: 'test'
-        arguments: '--no-build --configuration $(buildConfiguration)'
+        arguments: '--no-build --configuration $(buildConfiguration) --logger "trx;LogFileName=TestResults.trx"'
         publishTestResults: true
-        projects: '$(System.DefaultWorkingDirectory)/**/*UITests.csproj'  
+        projects: '$(System.DefaultWorkingDirectory)/**/*UITests.csproj'
+
 
 - stage: 'Staging'
   displayName: 'Deploy to the staging environment'
