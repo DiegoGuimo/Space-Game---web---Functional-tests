@@ -166,6 +166,25 @@ stages:
         del chromedriver.zip
         echo "##vso[task.setvariable variable=PATH]C:\chromedriver;$(PATH)"
       displayName: 'Descargar e instalar ChromeDriver'
+    
+    - script: |
+        echo "Descargando e instalando ChromeDriver..."
+        for /f "tokens=2 delims==" %%A in ('wmic datafile where name^="C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" get Version /value ^| find "="') do set CHROME_VERSION=%%A
+        echo Chrome Version: %CHROME_VERSION%
+        
+        powershell -Command "& {
+          $chromeDriverVersion = (Invoke-WebRequest -Uri 'https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions.json' | ConvertFrom-Json).channels.Stable.version;
+          echo 'ChromeDriver Version:' $chromeDriverVersion;
+          $downloadUrl = 'https://storage.googleapis.com/chrome-for-testing-public/' + $chromeDriverVersion + '/win64/chromedriver-win64.zip';
+          Invoke-WebRequest -Uri $downloadUrl -OutFile chromedriver.zip;
+          Expand-Archive -Path chromedriver.zip -DestinationPath C:\chromedriver -Force;
+          Remove-Item chromedriver.zip -Force;
+        }"
+
+        echo "##vso[task.setvariable variable=PATH]C:\chromedriver;%PATH%"
+      displayName: 'Descargar e instalar ChromeDriver'
+
+
 
     - task: DotNetCoreCLI@2
       displayName: 'Build the project - $(buildConfiguration)'
