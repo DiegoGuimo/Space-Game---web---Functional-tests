@@ -1,168 +1,72 @@
 trigger:
-- '*'
+- main
 
-variables:
-  buildConfiguration: 'Release'
-  wwwrootDir: 'Tailspin.SpaceGame.Web/wwwroot'
-  dotnetSdkVersion: '8.x'
-  releaseBranchName: 'release'
+pool:
+  vmImage: 'windows-latest'  # Usa un agente Windows
 
-stages:
-- stage: Build
-  displayName: Build the web application
-  jobs: 
-  - job: Build
-    displayName: Build job
-    pool:
-      name: RetoAzure
-      demands:
-      - agent.name -equals MyAgent
+steps:
+# ======= Paso 1: Verificar e Instalar Google Chrome =======
+- script: |
+    echo "Verificando instalación de Google Chrome..."
+    reg query "HKEY_LOCAL_MACHINE\SOFTWARE\Google\Chrome\BLBeacon" /v version
+    if %ERRORLEVEL% neq 0 (
+      echo "Instalando Google Chrome..."
+      curl -o chrome_installer.exe https://dl.google.com/chrome/install/latest/chrome_installer.exe
+      start /wait chrome_installer.exe /silent /install
+      del chrome_installer.exe
+    )
+    echo "Google Chrome está instalado."
+  displayName: 'Verificar e instalar Google Chrome'
 
-    steps:
-    - task: UseDotNet@2
-      displayName: Use .NET SDK $(dotnetSdkVersion)
-      inputs:
-        version: $(dotnetSdkVersion)
+# ======= Paso 2: Descargar e Instalar ChromeDriver =======
+- powershell: |
+    Write-Host "Descargando e instalando ChromeDriver..."
+    $chromeVersion = (Get-ItemProperty "HKLM:\SOFTWARE\Google\Chrome\BLBeacon").version
+    Write-Host "Versión de Chrome detectada: $chromeVersion"
 
-    - task: UseNode@1
-      displayName: Install Node.js 16.x
-      inputs:
-        version: 16.x
+    $majorVersion = $chromeVersion.Split(".")[0]
+    $url = "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$majorVersion"
+    $chromeDriverVersion = Invoke-WebRequest -Uri $url -UseBasicParsing | Select-Object -ExpandProperty Content
+    Write-Host "ChromeDriver Version: $chromeDriverVersion"
 
-    - script: npm cache clean --force
-      displayName: Clean NPM cache
+    $downloadUrl = "https://chromedriver.storage.googleapis.com/$chromeDriverVersion/chromedriver_win32.zip"
+    Invoke-WebRequest -Uri $downloadUrl -OutFile chromedriver.zip
 
-    - task: Npm@1
-      displayName: Run npm install
-      inputs:
-        verbose: false
-        arguments: --no-optional
+    Expand-Archive -Path chromedriver.zip -DestinationPath C:\chromedriver -Force
+    Remove-Item chromedriver.zip -Force
 
-    - script: npx sass $(wwwrootDir) --no-source-map --style=compressed
-      displayName: Compile Sass assets
+    [System.Environment]::SetEnvironmentVariable("PATH", "C:\chromedriver;" + [System.Environment]::GetEnvironmentVariable("PATH", [System.EnvironmentVariableTarget]::Machine), [System.EnvironmentVariableTarget]::Machine)
+    Write-Host "ChromeDriver instalado correctamente y agregado al PATH."
+  displayName: 'Descargar e instalar ChromeDriver'
 
-    - script: npm install --global gulp-cli
-      displayName: Install Gulp CLI globally
+# ======= Paso 3: Configurar Dependencias del Proyecto =======
+- task: UseNode@1
+  inputs:
+    version: '21.x'  # Especifica la versión de Node.js
 
-    - task: gulp@1
-      displayName: Run gulp tasks
+- script: |
+    echo "Instalando dependencias del proyecto..."
+    npm install
+  displayName: 'Instalar dependencias'
 
-    - script: echo "$(Build.DefinitionName), $(Build.BuildId), $(Build.BuildNumber)" > buildinfo.txt
-      displayName: Write build info
-      workingDirectory: $(wwwrootDir)
+# ======= Paso 4: Ejecutar Pruebas Automatizadas =======
+- script: |
+    echo "Ejecutando pruebas automatizadas..."
+    npm test
+  displayName: 'Ejecutar pruebas'
 
-    - task: DotNetCoreCLI@2
-      displayName: Restore project dependencies
-      inputs:
-        command: restore
-        projects: '**/*.csproj'
+# ======= Paso 5: Publicar Resultados =======
+- task: PublishTestResults@2
+  inputs:
+    testResultsFormat: 'JUnit'
+    testResultsFiles: '**/test-results.xml'
+    mergeTestResults: true
+  condition: succeededOrFailed()
+  displayName: 'Publicar resultados de pruebas'
 
-    - task: DotNetCoreCLI@2
-      displayName: Build the project - $(buildConfiguration)
-      inputs:
-        command: build
-        arguments: --no-restore --configuration $(buildConfiguration)
-        projects: '**/*.csproj'
-
-    - task: DotNetCoreCLI@2
-      displayName: Publish the project - $(buildConfiguration)
-      inputs:
-        command: publish
-        projects: '$(System.DefaultWorkingDirectory)/**/Tailspin.SpaceGame.Web.csproj'
-        publishWebProjects: false
-        arguments: --no-build --configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/$(buildConfiguration)
-        zipAfterPublish: true
-
-    - publish: $(Build.ArtifactStagingDirectory)
-      artifact: drop
-
-- stage: 'Dev'
-  displayName: 'Deploy to the dev environment'
-  dependsOn: Build
-  condition: succeeded()
-  jobs:
-  - job: Validate
-    displayName: 'Validation Job'
-    steps:
-    - script: echo "Validation successful"
-
-- stage: 'Test'
-  displayName: 'Run UI Tests'
-  dependsOn: Dev
-  jobs:
-  - job: RunUITests
-    displayName: 'Run UI tests'
-    pool:
-      name: 'RetoAzure'
-      demands:
-         - agent.name -equals MyAgent
-    variables:
-    - group: 'Release'
-    steps:
-    - script: |
-        echo "Verificando instalación de Google Chrome..."
-        if not exist "C:\Program Files\Google\Chrome\Application\chrome.exe" (
-          echo "Instalando Google Chrome..."
-          curl -o chrome_installer.exe https://dl.google.com/chrome/install/latest/chrome_installer.exe
-          start /wait chrome_installer.exe /silent /install
-          del chrome_installer.exe
-        )
-        echo "Google Chrome está instalado."
-      displayName: 'Verificar e instalar Google Chrome'
-
-    - script: |
-        echo "Descargando e instalando ChromeDriver..."
-        for /f "tokens=2 delims==" %%A in ('wmic datafile where name^="C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" get Version /value ^| find "="') do set CHROME_VERSION=%%A
-        echo Chrome Version: %CHROME_VERSION%
-        
-        powershell -Command "& {
-          $chromeDriverVersion = (Invoke-WebRequest -Uri 'https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions.json' | ConvertFrom-Json).channels.Stable.version;
-          echo 'ChromeDriver Version:' $chromeDriverVersion;
-          $downloadUrl = 'https://storage.googleapis.com/chrome-for-testing-public/' + $chromeDriverVersion + '/win64/chromedriver-win64.zip';
-          Invoke-WebRequest -Uri $downloadUrl -OutFile chromedriver.zip;
-          Expand-Archive -Path chromedriver.zip -DestinationPath C:\chromedriver -Force;
-          Remove-Item chromedriver.zip -Force;
-        }"
-
-        echo "##vso[task.setvariable variable=PATH]C:\chromedriver;%PATH%"
-      displayName: 'Descargar e instalar ChromeDriver'
-
-    - task: DotNetCoreCLI@2
-      displayName: 'Build the project - $(buildConfiguration)'
-      inputs:
-        command: 'build'
-        arguments: '--configuration $(buildConfiguration)'
-        projects: '$(System.DefaultWorkingDirectory)/**/*UITests.csproj'
-    
-    - task: DotNetCoreCLI@2
-      displayName: 'Run UI tests - $(buildConfiguration)'
-      inputs:
-        command: 'test'
-        arguments: '--no-build --configuration $(buildConfiguration) --logger "trx;LogFileName=TestResults.trx"'
-        publishTestResults: true
-        projects: '$(System.DefaultWorkingDirectory)/**/*UITests.csproj'
-
-- stage: 'Staging'
-  displayName: 'Deploy to the staging environment'
-  dependsOn: Test
-  jobs:
-  - deployment: Deploy
-    pool:
-      name: 'RetoAzure'
-      demands:
-        - agent.name -equals MyAgent
-    environment: staging
-    variables:
-    - group: 'Release'
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - download: current
-            artifact: drop
-          - task: AzureWebApp@1
-            displayName: 'Azure App Service Deploy: website'
-            inputs:
-              azureSubscription: 'Resource Manager - Tailspin - Space Game'
-              appName: '$(WebAppNameStaging)'
-              package: '$(Pipeline.Workspace)/drop/$(buildConfiguration)/*.zip'
+# ======= Paso 6: Publicar Artefactos (Opcional) =======
+- task: PublishBuildArtifacts@1
+  inputs:
+    pathToPublish: '$(Build.ArtifactStagingDirectory)'
+    artifactName: 'drop'
+  displayName: 'Publicar artefactos'
