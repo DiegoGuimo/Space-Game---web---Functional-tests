@@ -151,36 +151,36 @@ stages:
               package: '$(Pipeline.Workspace)/drop/$(buildConfiguration)/*.zip'
 
   - job: RunUITests
-  dependsOn: Deploy
-  displayName: 'Run UI tests'
-  pool:
-    name: 'RetoAzure'
-    demands:
-      - agent.name -equals MyAgent
-  variables:
-    - group: 'Release'  # Asegúrate de que este grupo contenga la variable SITE_URL
-    - name: SITE_URL
-      value: "https://tailspin-space-game-web-test-22644.azurewebsites.net"  # Definir la URL aquí
-  steps: 
-    - task: UseDotNet@2
-      displayName: 'Use .NET SDK $(dotnetSdkVersion)'
-      inputs:
-        version: '$(dotnetSdkVersion)'
+    dependsOn: Deploy
+    displayName: 'Run UI tests'
+    pool:
+      name: 'RetoAzure'
+      demands:
+        - agent.name -equals MyAgent
+    variables:
+      - group: 'Release'  # Asegúrate de que este grupo contenga la variable SITE_URL
+      - name: SITE_URL
+        value: "https://tailspin-space-game-web-test-22644.azurewebsites.net"  # Definir la URL aquí
+    steps: 
+      - task: UseDotNet@2
+        displayName: 'Use .NET SDK $(dotnetSdkVersion)'
+        inputs:
+          version: '$(dotnetSdkVersion)'
 
-    - task: DotNetCoreCLI@2
-      displayName: 'Build the project - $(buildConfiguration)'
-      inputs:
-        command: 'build'
-        arguments: '--configuration $(buildConfiguration)'
-        projects: '$(System.DefaultWorkingDirectory)/**/*UITests.csproj'
+      - task: DotNetCoreCLI@2
+        displayName: 'Build the project - $(buildConfiguration)'
+        inputs:
+          command: 'build'
+          arguments: '--configuration $(buildConfiguration)'
+          projects: '$(System.DefaultWorkingDirectory)/**/*UITests.csproj'
 
-    - task: DotNetCoreCLI@2
-      displayName: 'Run unit tests - $(buildConfiguration)'
-      inputs:
-        command: 'test'
-        arguments: '--no-build --configuration $(buildConfiguration)'
-        publishTestResults: true
-        projects: '$(System.DefaultWorkingDirectory)/**/*UITests.csproj'
+      - task: DotNetCoreCLI@2
+        displayName: 'Run unit tests - $(buildConfiguration)'
+        inputs:
+          command: 'test'
+          arguments: '--no-build --configuration $(buildConfiguration)'
+          publishTestResults: true
+          projects: '$(System.DefaultWorkingDirectory)/**/*UITests.csproj'
 
 
 - stage: 'Staging'
