@@ -86,58 +86,11 @@ stages:
     steps:
     - script: echo "Validation successful"
 
-- stage: 'Deploy'
-  displayName: 'Deploy the web application'
-  dependsOn: Build
-  jobs:
-  - deployment: Deploy
-    pool:
-      name: 'RetoAzure'
-      demands:
-        - agent.name -equals MyAgent
-    environment: dev
-    variables:
-    - group: Release
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - download: current
-            artifact: drop
-          - task: AzureWebApp@1
-            displayName: 'Azure App Service Deploy: website'
-            inputs:
-              azureSubscription: 'Resource Manager - Tailspin - Space Game'
-              appName: '$(WebAppNameDev)'
-              package: '$(Pipeline.Workspace)/drop/$(buildConfiguration)/*.zip'
-
 - stage: 'Test'
-  displayName: 'Deploy to the test environment'
+  displayName: 'Run UI Tests'
   dependsOn: Dev
   jobs:
-  - deployment: Deploy
-    pool:
-      name: 'RetoAzure'
-      demands:
-        - agent.name -equals MyAgent
-    environment: test
-    variables:
-    - group: 'Release'
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - download: current
-            artifact: drop
-          - task: AzureWebApp@1
-            displayName: 'Azure App Service Deploy: website'
-            inputs:
-              azureSubscription: 'Resource Manager - Tailspin - Space Game'
-              appName: '$(WebAppNameTest)'
-              package: '$(Pipeline.Workspace)/drop/$(buildConfiguration)/*.zip'
-  
   - job: RunUITests
-    dependsOn: Deploy
     displayName: 'Run UI tests'
     pool:
       name: 'RetoAzure'
@@ -145,7 +98,7 @@ stages:
          - agent.name -equals MyAgent
     variables:
     - group: 'Release'
-    steps: 
+    steps:
     - script: |
         echo "Verificando instalación de Google Chrome..."
         if not exist "C:\Program Files\Google\Chrome\Application\chrome.exe" (
@@ -157,16 +110,6 @@ stages:
         echo "Google Chrome está instalado."
       displayName: 'Verificar e instalar Google Chrome'
 
-    - script: |
-        echo "Descargando e instalando ChromeDriver..."
-        CHROME_VERSION=$(powershell "(Get-Item 'C:\Program Files\Google\Chrome\Application\chrome.exe').VersionInfo.FileVersion")
-        CHROMEDRIVER_VERSION=$(curl -sS https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions.json | jq -r ".channels.Stable.version")
-        curl -o chromedriver.zip https://storage.googleapis.com/chrome-for-testing-public/$CHROMEDRIVER_VERSION/win64/chromedriver-win64.zip
-        powershell -Command "Expand-Archive -Path chromedriver.zip -DestinationPath C:\chromedriver"
-        del chromedriver.zip
-        echo "##vso[task.setvariable variable=PATH]C:\chromedriver;$(PATH)"
-      displayName: 'Descargar e instalar ChromeDriver'
-    
     - script: |
         echo "Descargando e instalando ChromeDriver..."
         for /f "tokens=2 delims==" %%A in ('wmic datafile where name^="C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" get Version /value ^| find "="') do set CHROME_VERSION=%%A
@@ -184,8 +127,6 @@ stages:
         echo "##vso[task.setvariable variable=PATH]C:\chromedriver;%PATH%"
       displayName: 'Descargar e instalar ChromeDriver'
 
-
-
     - task: DotNetCoreCLI@2
       displayName: 'Build the project - $(buildConfiguration)'
       inputs:
@@ -200,7 +141,6 @@ stages:
         arguments: '--no-build --configuration $(buildConfiguration) --logger "trx;LogFileName=TestResults.trx"'
         publishTestResults: true
         projects: '$(System.DefaultWorkingDirectory)/**/*UITests.csproj'
-
 
 - stage: 'Staging'
   displayName: 'Deploy to the staging environment'
