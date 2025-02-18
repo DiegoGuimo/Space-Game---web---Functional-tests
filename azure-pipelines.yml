@@ -5,6 +5,7 @@ variables:
   buildConfiguration: 'Release'
   wwwrootDir: 'Tailspin.SpaceGame.Web/wwwroot'
   dotnetSdkVersion: '6.x'
+  releaseBranchName: 'release'
 
 stages:
 - stage: Build
