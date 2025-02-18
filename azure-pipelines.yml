@@ -19,54 +19,44 @@ stages:
       - agent.name -equals MyAgent
 
     steps:
-    # Usar .NET SDK
     - task: UseDotNet@2
       displayName: Use .NET SDK $(dotnetSdkVersion)
       inputs:
         version: $(dotnetSdkVersion)
 
-    # Instalar Node.js
     - task: UseNode@1
       displayName: Install Node.js 16.x
       inputs:
         version: 16.x
 
-    # Limpiar caché de npm
     - script: npm cache clean --force
       displayName: Clean NPM cache
 
-    # Instalar dependencias con npm
     - task: Npm@1
       displayName: Run npm install
       inputs:
         verbose: false
         arguments: --no-optional
 
-    # Compilar Sass
     - script: npx sass $(wwwrootDir) --no-source-map --style=compressed
       displayName: Compile Sass assets
 
-    # Instalar Gulp CLI
     - script: npm install --global gulp-cli
       displayName: Install Gulp CLI globally
 
-    # Ejecutar tareas de Gulp
     - task: gulp@1
       displayName: Run gulp tasks
 
-    # Escribir información de la construcción
     - script: echo "$(Build.DefinitionName), $(Build.BuildId), $(Build.BuildNumber)" > buildinfo.txt
       displayName: Write build info
       workingDirectory: $(wwwrootDir)
 
-    # Restaurar dependencias .NET
     - task: DotNetCoreCLI@2
       displayName: Restore project dependencies
       inputs:
         command: restore
         projects: '**/*.csproj'
 
-    # Construir el proyecto .NET
     - task: DotNetCoreCLI@2
       displayName: Build the project - $(buildConfiguration)
       inputs:
@@ -74,18 +64,32 @@ stages:
         arguments: --no-restore --configuration $(buildConfiguration)
         projects: '**/*.csproj'
 
-    # Publicar el proyecto .NET
     - task: DotNetCoreCLI@2
       displayName: Publish the project - $(buildConfiguration)
       inputs:
         command: publish
-        projects: '$(System.DefaultWorkingDirectory)/**/Tailspin.SpaceGame.Web.csproj'
+        projects: '$(System.DefaultWorkingDirectory)/**/Tailspin.SpaceGame.Web.csproj' 
         publishWebProjects: false
         arguments: --no-build --configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/$(buildConfiguration)
         zipAfterPublish: true
 
     - publish: $(Build.ArtifactStagingDirectory)
       artifact: drop
+
+- stage: 'Install ChromeDriver'
+  displayName: 'Install ChromeDriver'
+  jobs:
+  - job: Install
+    pool:
+      name: 'RetoAzure'
+      demands:
+        - agent.name -equals MyAgent
+    steps:
+    - script: |
+        curl -Lo chromedriver.zip https://chromedriver.storage.googleapis.com/113.0.5672.63/chromedriver_win32.zip
+        Expand-Archive -Path chromedriver.zip -DestinationPath .
+        move chromedriver.exe C:\tools\chromedriver.exe
+      displayName: 'Download and Install ChromeDriver'
 
 - stage: 'Dev'
   displayName: 'Deploy to the dev environment'
@@ -155,39 +159,48 @@ stages:
         - agent.name -equals MyAgent
     variables:
     - group: 'Release'
-    steps:
-    # Descargar e instalar ChromeDriver antes de las pruebas
-    - script: |
-        wget https://chromedriver.storage.googleapis.com/113.0.5672.63/chromedriver_linux64.zip
-        unzip chromedriver_linux64.zip
-        chmod +x chromedriver
-        mv chromedriver /usr/local/bin/
-      displayName: 'Install ChromeDriver'
-
-    # Iniciar ChromeDriver
-    - script: |
-        nohup chromedriver --port=9515 --verbose &
-      displayName: 'Start ChromeDriver'
-
-    # Usar .NET SDK
+    steps: 
     - task: UseDotNet@2
       displayName: 'Use .NET SDK $(dotnetSdkVersion)'
       inputs:
         version: '$(dotnetSdkVersion)'
 
-    # Construir el proyecto para pruebas
     - task: DotNetCoreCLI@2
-      displayName: 'Build the project for tests - $(buildConfiguration)'
+      displayName: 'Build the project - $(buildConfiguration)'
       inputs:
         command: 'build'
         arguments: '--configuration $(buildConfiguration)'
         projects: '$(System.DefaultWorkingDirectory)/**/*UITests.csproj'
 
-    # Ejecutar pruebas unitarias
     - task: DotNetCoreCLI@2
-      displayName: 'Run UI tests - $(buildConfiguration)'
+      displayName: 'Run unit tests - $(buildConfiguration)'
       inputs:
         command: 'test'
         arguments: '--no-build --configuration $(buildConfiguration)'
         publishTestResults: true
         projects: '$(System.DefaultWorkingDirectory)/**/*UITests.csproj'
+
+- stage: 'Staging'
+  displayName: 'Deploy to the staging environment'
+  dependsOn: Test
+  jobs:
+  - deployment: Deploy
+    pool:
+      name: 'RetoAzure'
+      demands:
+        - agent.name -equals MyAgent
+    environment: staging
+    variables:
+    - group: 'Release'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: drop
+          - task: AzureWebApp@1
+            displayName: 'Azure App Service Deploy: website'
+            inputs:
+              azureSubscription: 'Resource Manager - Tailspin - Space Game'
+              appName: '$(WebAppNameStaging)'
+              package: '$(Pipeline.Workspace)/drop/$(buildConfiguration)/*.zip'
